@@ -1,5 +1,6 @@
 #!/bin/sh
 # Try to merge a Pull Request from github.
+# (c) 2015 Michał Górny, 2-clause BSD licensed
 
 try() {
 	echo "${*}" >&2

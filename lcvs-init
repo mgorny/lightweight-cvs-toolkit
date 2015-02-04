@@ -1,5 +1,6 @@
 #!/bin/sh
 # Initialize a lightweight CVS checkout of gentoo-x86.
+# (c) 2015 Michał Górny, 2-clause BSD licensed
 
 sanity_checks() {
 	local location=${1}
