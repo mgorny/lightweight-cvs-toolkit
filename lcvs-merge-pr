@@ -1,0 +1,129 @@
+#!/bin/sh
+# Try to merge a Pull Request from github.
+
+try() {
+	echo "${*}" >&2
+	if ! "${@}"; then
+		echo "^- failed, I'm so sad now :(."
+		exit 1
+	fi
+}
+
+main() {
+	local pr=${1}
+
+	if [ "${#}" -ne 1 ]; then
+		echo "Usage: ${0} <pull-request>" >&2
+		echo >&2
+		echo "<pull-request> - PR# or URI" >&2
+		exit 1
+	fi
+
+	local cvsrepo=${GENTOO_CVS}
+	if [ -z "${cvsrepo}" ]; then
+		cvsrepo=$(portageq get_repo_path "${EROOT:-/}" gentoo-cvs)
+		if [ -z "${cvsrepo}" ]; then
+			echo "Unable to find CVS checkout! Please name the repo" >&2
+			echo "gentoo-cvs or set GENTOO_CVS to the repository path." >&2
+			exit 1
+		fi
+	fi
+
+	case "${pr}" in
+		http://*.diff|https://*.diff|http://*.patch|https://*.patch)
+			# nice patch, be happy
+			;;
+		http://*|https://*|http://*|https://*)
+			# likely PR URI, append .diff
+			pr=${pr}.diff
+			;;
+		[0-9]*)
+			# likely PR# (yeah, i know it catches '1f' too but whatever)
+			pr=https://github.com/gentoo/gentoo-portage-rsync-mirror/pull/${pr}.diff
+			;;
+		*)
+			echo "Invalid PR identifier: ${pr}" >&2
+			exit 1
+	esac
+
+	local patch=$(mktemp)
+	[ -z "${patch}" ] && patch="${TMPDIR:-/tmp}"/gentoo-git2cvs.diff
+
+	trap "rm \"${patch}\"" EXIT
+	echo " * Fetching the diff ..." >&2
+
+	try wget -O "${patch}" "${pr}"
+
+	local paths x
+	diffpaths=$(git apply --numstat "${patch}" | awk '
+		BEGIN {
+			prev = "";
+		}
+
+		$3 ~ /^(eclass|licenses|metadata|profiles|scripts)/ {
+			split($3, path, "/");
+			cur = path[1];
+			if (cur != prev) {
+				print cur;
+				prev = cur;
+			}
+			next;
+		}
+
+		{
+			split($3, path, "/");
+			cur = path[1] "/" path[2];
+			if (cur != prev) {
+				print cur;
+				prev = cur;
+			}
+		}
+')
+
+	if [ -z "${diffpaths}" ]; then
+		echo "git is unable to figure out what the diff is about!" >&2
+		exit 1
+	fi
+
+	echo >&2
+	echo " * Checking out files ..." >&2
+	try cd "${cvsrepo}"
+
+	local f
+	for f in ${diffpaths}; do
+		if [ -e ${f} ]; then
+			echo "Warning: ${f} already exists!" >&2
+		fi
+	done
+
+	try cvs up -dP ${diffpaths}
+
+	echo >&2
+	echo " * Applying the changes ..." >&2
+	git apply --reject "${patch}"
+
+	echo >&2
+	echo " * Updating CVS bits if necessary ..." >&2
+	diffpaths=$(git apply --numstat "${patch}" | awk '{ print $3 }')
+
+	local addpaths rmpaths
+	for f in ${diffpaths}; do
+		if [ -f ${f} ]; then
+			addpaths="${addpaths} ${f}"
+		else
+			rmpaths="${rmpaths} ${f}"
+		fi
+	done
+
+	if [ -n "${addpaths}" ]; then
+		cvs add ${addpaths}
+	fi
+	if [ -n "${rmpaths}" ]; then
+		cvs rm ${rmpaths}
+	fi
+
+	echo >&2
+	echo " * Done!"
+}
+
+main "${@}"
