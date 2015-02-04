@@ -1,0 +1,242 @@
+#!/bin/sh
+# Initialize a lightweight CVS checkout of gentoo-x86.
+
+sanity_checks() {
+	local location=${1}
+	local username=${2}
+	local reponame=${3}
+
+	if [ -e "${location}" ]; then
+		echo "<location> already exists. Please remove it first." >&2
+		exit 1
+	fi
+
+	if [ "${reponame}" = gentoo ]; then
+		echo "<reponame> must not be gentoo (as it will use gentoo as master)" >&2
+		exit 1
+	fi
+
+	if ! type cvs &>/dev/null; then
+		echo "You need to install dev-vcs/cvs (obviously)." >&2
+		exit 1
+	fi
+
+	if ! type git &>/dev/null; then
+		echo "You need to install dev-vcs/git (because git is fun!)." >&2
+		exit 1
+	fi
+
+	if [ -n "$(portageq get_repo_path "${EROOT:-/}" "${reponame}")" ]; then
+		echo "There seems to be a repository named ${reponame} already!" >&2
+		exit 1
+	fi
+}
+
+try() {
+	echo "${*}" >&2
+	if ! "${@}"; then
+		echo "^- failed, running away screaming :(."
+		exit 1
+	fi
+}
+
+create_checkout() {
+	local location=${1}
+	local username=${2}
+
+	echo >&2
+	echo " * Creating CVS checkout ..." >&2
+	try cd "${location%/*}"
+	try cvs -d "${username}@cvs.gentoo.org:/var/cvsroot" \
+		co -d "${location##*/}" -l gentoo-x86
+	try cd "${location##*/}"
+	try cvs up -dl metadata $(cat "${PORTDIR}"/profiles/categories)
+}
+
+update_layout_conf() {
+	local location=${1}
+	local reponame=${2}
+
+	echo >&2
+	echo " * Updating layout.conf ..." >&2
+
+	cat >> metadata/layout.conf <<_EOF_
+
+# override repository name without modifying profiles/ dir
+repo-name = ${reponame}
+# fill out the blanks with a regular rsync/git checkout
+masters = gentoo
+_EOF_
+	if [ "${?}" -ne 0 ]; then
+		echo "Write failed (!?)" >&2
+		exit 1
+	fi
+}
+
+create_git() {
+	local location=${1}
+
+	echo >&2
+	echo " * Making the checkout awesome using git ..." >&2
+
+	try git init
+	try git add -A
+	try git commit -q -m "Initial lightweight CVS checkout"
+}
+
+update_repos_conf() {
+	local location=${1}
+	local reponame=${2}
+
+	echo >&2
+	echo " * Updating repos.conf ..." >&2
+
+	local append_to=${EROOT:-/}etc/portage/repos.conf
+	if [ -d "${append_to}" ]; then
+		append_to=${append_to}/cvs.conf
+	fi
+
+	REAL_REPOS_CONF=
+	TEMPORARY_REPOS_CONF=
+	if ! [ -w "${append_to}" ]; then
+		echo "No write permission to ${append_to}." >&2
+		echo "Let's use a temporary file." >&2
+		REAL_REPOS_CONF=${append_to}
+		append_to=$(mktemp)
+		if [ -z "${append_to}" ]; then
+			# Seriously? No mktemp?
+			append_to=${TMPDIR:-/tmp}/cvs.repos.conf
+		fi
+		TEMPORARY_REPOS_CONF=${append_to}
+	fi
+
+	echo "Using: ${append_to}" >&2
+
+	cat >> "${append_to}" <<_EOF_
+
+[${reponame}]
+location = ${location}
+# keep it high so stuff aimed for commit overrides other stuff
+priority = 1000
+_EOF_
+	if [ "${?}" -ne 0 ]; then
+		echo "Write failed (!?)" >&2
+		exit 1
+	fi
+}
+
+print_summary() {
+	cat >&2 <<_EOF_
+ * Done.
+
+Awesome! You just got yourself a new, shiny partial CVS checkout with
+git machinery to help you keep it clean. Now, a few general tips on how
+to use it.
+
+The checkout has categories checked out for you -- but no ebuilds,
+licenses, eclasses and profiles -- the things you'd have to keep in sync
+all the time. Through masters inheritance, the versions from your
+regular "gentoo" checkout (rsync or git, I suppose) are used.
+
+Let's suppose you want to work on dev-foo/bar. All you need to do is
+check the correct directory out:
+
+  cd ${location}/dev-foo
+  cvs up -dP bar
+
+In fact, you can also do that top-level, and multiple packages at once:
+
+  cd ${location}
+  cvs up -dP dev-foo/bar dev-bar/baz
+
+If you need to work on eclasses, licenses or profiles, you just need
+to check the proper directory out:
+
+  cd ${location}
+  cvs up -dP profiles
+
+Note that some fancy profile work will require to update make.profile
+symlink. Remember to set it back when done!
+
+When you're done committing, just remove the newly checked out
+directories. If you want to clean up the whole repository, git can do
+that for you:
+
+  cd ${location}
+  git clean -dfx
+
+You can also use git to manage your partial work. Just remember to 'git
+add' everything including those fancy CVS directories. And note that
+conflicts may happen, etc. Use branches to avoid messing up too much :).
+
+Enjoy!
+_EOF_
+
+	if [ -n "${TEMPORARY_REPOS_CONF}" ]; then
+		cat >&2 <<_EOF_
+
+WARNING: I was unable to update your repos.conf file. Most likely you
+didn't run me as root which is a smart move. In order to update your
+repository configuration, run as appropriately privileged user:
+
+  cat "${TEMPORARY_REPOS_CONF}" >> "${REAL_REPOS_CONF}"
+  rm "${TEMPORARY_REPOS_CONF}"
+_EOF_
+	fi
+}
+
+main() {
+	# disable globs to prevent accidental expansion
+	set -f
+
+	local location=${1}
+	local username=${2:-$(id -u -n)}
+	local reponame=${3:-gentoo-cvs}
+
+	if [ -z "${location}" -o "${#}" -gt 3 ]; then
+		echo "Usage: ${0} <location> [<username>] [<reponame>]" >&2
+		echo >&2
+		echo "<location> -- where to put CVS checkout" >&2
+		echo "<username> -- your gentoo cvs username (defaults to local username)" >&2
+		echo "<reponame> -- repo_name for new checkout (defaults to gentoo-cvs)" >&2
+		exit 1
+	fi
+
+	sanity_checks "${location}" "${username}" "${reponame}"
+
+	echo "I am going to create a new lightweight CVS checkout using:" >&2
+	echo "  location: ${location}" >&2
+	echo "  username: ${username} (@cvs.gentoo.org)" >&2
+	echo "  reponame: ${reponame}" >&2
+	echo >&2
+	while :; do
+		printf "Is this correct? [y/n] " >&2
+		local repl
+		if read -r repl; then
+			case "${repl}" in
+				[yY]|[yY][eE][sS]) break;;
+				[nN]|[nN][oO]) exit 1;;
+			esac
+		else
+			exit 1
+		fi
+	done
+
+	echo >&2
+	local PORTDIR=${PORTDIR:-$(portageq get_repo_path "${EROOT:-/}" gentoo)}
+	if [ -z "${PORTDIR}" ]; then
+		echo "Unable to determine Gentoo repository location." >&2
+		echo "Please set PORTDIR to override it." >&2
+	else 
+		echo "Found gentoo repository at: ${PORTDIR}" >&2
+	fi
+
+	create_checkout "${location}" "${username}"
+	update_layout_conf "${location}" "${reponame}"
+	create_git "${location}"
+	update_repos_conf "${location}" "${reponame}"
+
+	print_summary "${location}" "${reponame}"
+}
+
+main "${@}"
