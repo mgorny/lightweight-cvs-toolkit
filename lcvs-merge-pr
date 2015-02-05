@@ -101,7 +101,7 @@ main() {
 
 	echo >&2
 	echo " * Applying the changes ..." >&2
-	git apply --reject "${patch}"
+	git apply --reject --exclude='**/ChangeLog' --exclude='**/Manifest' "${patch}"
 
 	echo >&2
 	echo " * Updating CVS bits if necessary ..." >&2
