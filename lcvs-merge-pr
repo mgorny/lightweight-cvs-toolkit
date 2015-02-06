@@ -108,10 +108,10 @@ main() {
 
 	echo >&2
 	echo " * Updating CVS bits if necessary ..." >&2
-	diffpaths=$(git apply --numstat "${patch}" | awk '{ print $3 }')
+	difffiles=$(git apply --numstat "${patch}" | awk '{ print $3 }')
 
 	local addpaths rmpaths
-	for f in ${diffpaths}; do
+	for f in ${difffiles}; do
 		if [ -f ${f} ]; then
 			addpaths="${addpaths} ${f}"
 		else
@@ -128,6 +128,11 @@ main() {
 
 	echo >&2
 	echo " * Done!"
+
+	echo >&2
+	for f in ${diffpaths}; do
+		echo "cd \"${cvsrepo}/${f}\"" >&2
+	done
 }
 
 main "${@}"
