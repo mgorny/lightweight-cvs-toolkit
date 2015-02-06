@@ -23,10 +23,13 @@ main() {
 	local cvsrepo=${GENTOO_CVS}
 	if [ -z "${cvsrepo}" ]; then
 		cvsrepo=$(portageq get_repo_path "${EROOT:-/}" gentoo-cvs)
-		if [ -z "${cvsrepo}" ]; then
-			echo "Unable to find CVS checkout! Please name the repo" >&2
-			echo "gentoo-cvs or set GENTOO_CVS to the repository path." >&2
-			exit 1
+		if [ -z "${cvsrepo}" -o '(' ! -d "${cvsrepo}"/CVS ')' ]; then
+			cvsrepo=$(portageq get_repo_path "${EROOT:-/}" gentoo)
+			if [ -z "${cvsrepo}" -o '(' ! -d "${cvsrepo}"/CVS ')' ]; then
+				echo "Unable to find a CVS checkout! Please name the repo" >&2
+				echo "gentoo-cvs or set GENTOO_CVS to the repository path." >&2
+				exit 1
+			fi
 		fi
 	fi
 
