@@ -118,7 +118,19 @@ main() {
 
 	local addpaths rmpaths
 	for f in ${difffiles}; do
-		if [ -f ${f} ]; then
+		if [ -f "${f}" ]; then
+			# cvs add parent dirs too if necessary
+			local pd=${f%/*}
+			local parents=
+			while [ ! -d "${pd}"/CVS ]; do
+				parents="${pd} ${parents}"
+				pd=${pd%/*}
+			done
+
+			if [ -n "${parents}" ]; then
+				cvs add ${parents}
+			fi
+
 			addpaths="${addpaths} ${f}"
 		else
 			rmpaths="${rmpaths} ${f}"
