@@ -1,5 +1,5 @@
 #!/bin/sh
-# Try to merge a Pull Request from github.
+# Revert (apply reverse patch for) a git commit.
 # (c) 2015 Michał Górny, 2-clause BSD licensed
 
 try() {
@@ -14,9 +14,9 @@ main() {
 	local pr=${1}
 
 	if [ "${#}" -ne 1 ]; then
-		echo "Usage: ${0} <pull-request>" >&2
+		echo "Usage: ${0} <commit>" >&2
 		echo >&2
-		echo "<pull-request> - PR# or URI" >&2
+		echo "<pull-request> - hash or URI" >&2
 		exit 1
 	fi
 
@@ -41,12 +41,12 @@ main() {
 			# likely PR URI, append .diff
 			pr=${pr}.diff
 			;;
-		[0-9]*)
-			# likely PR# (yeah, i know it catches '1f' too but whatever)
-			pr=https://github.com/gentoo/gentoo-portage-rsync-mirror/pull/${pr}.diff
+		[0-9a-f]*)
+			# likely commit hash (yeah, i know it catches '1z' too but whatever)
+			pr=https://github.com/gentoo/gentoo-portage-rsync-mirror/commit/${pr}.diff
 			;;
 		*)
-			echo "Invalid PR identifier: ${pr}" >&2
+			echo "Invalid commit identifier: ${pr}" >&2
 			exit 1
 	esac
 
@@ -108,9 +108,9 @@ main() {
 
 	echo >&2
 	echo " * Applying the changes ..." >&2
-	git apply --reject \
+	git apply --reverse --reject \
 		--exclude='**/ChangeLog' --exclude='**/Manifest' \
-		"${patch}"
+		--exclude='metadata/**' "${patch}"
 
 	echo >&2
 	echo " * Updating CVS bits if necessary ..." >&2
