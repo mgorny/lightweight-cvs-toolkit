@@ -1,0 +1,25 @@
+Lightweight CVS toolkit
+-- to make CVS less annoying when you love git
+
+
+lcvs-init
+	A trivial tool to create lightweight CVS checkout. Unlike full CVS
+	checkout, it's going to hold only whatever you will be working on
+	(no full ebuild tree, no profiles, no eclasses...) and it will
+	use your master repository (rsync or git) to find the missing files,
+	just like a regular overlay.
+
+	More details on the wiki:
+	https://wiki.gentoo.org/wiki/Lightweight_CVS_Checkout
+
+lcvs-merge-pr
+	Try to merge Pull Request into CVS. Fetches the diff for it,
+	cvs up-s the necessary directories, git-applies the patch on top
+	of it and calls cvs add/cvs rm as appropriate. You still need to
+	update the ChangeLogs and commit the ebuilds yourself though.
+
+lcvs-revert
+	Try to revert a commit using git commit hash. Once again, fetches
+	the diff, cvs up-s and git-reverse-applies the patch. You are
+	responsible for updating the ChangeLog and committing the relevant
+	bits.
