@@ -23,3 +23,6 @@ lcvs-revert
 	the diff, cvs up-s and git-reverse-applies the patch. You are
 	responsible for updating the ChangeLog and committing the relevant
 	bits.
+
+lcvs-cleanup
+	Clean up local changes to the lightweight CVS checkout, using git.

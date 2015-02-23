@@ -1,0 +1,37 @@
+#!/bin/sh
+# Revert (apply reverse patch for) a git commit.
+# (c) 2015 Michał Górny, 2-clause BSD licensed
+
+try() {
+	echo "${*}" >&2
+	if ! "${@}"; then
+		echo "^- failed, I'm so sad now :(."
+		exit 1
+	fi
+}
+
+main() {
+	local cvsrepo=${GENTOO_CVS}
+	if [ -z "${cvsrepo}" ]; then
+		cvsrepo=$(portageq get_repo_path "${EROOT:-/}" gentoo-cvs)
+		if [ -z "${cvsrepo}" -o '(' ! -d "${cvsrepo}"/CVS ')' ]; then
+			cvsrepo=$(portageq get_repo_path "${EROOT:-/}" gentoo)
+			if [ -z "${cvsrepo}" -o '(' ! -d "${cvsrepo}"/CVS ')' ]; then
+				echo "Unable to find a CVS checkout! Please name the repo" >&2
+				echo "gentoo-cvs or set GENTOO_CVS to the repository path." >&2
+				exit 1
+			fi
+		fi
+	fi
+
+	try cd "${cvsrepo}"
+	if ! [ -d .git ]; then
+		echo "The CVS checkout does not seem to be a git repository. Aborting." >&2
+		exit 1
+	fi
+
+	try git reset --hard
+	try git clean -dfx
+}
+
+main "${@}"
