@@ -59,7 +59,7 @@ main() {
 	try wget -O "${patch}" "${pr}"
 
 	local paths x
-	diffpaths=$(git apply --numstat "${patch}" | awk '
+	diffpaths=$(GIT_DIR= git apply --numstat "${patch}" | awk '
 		BEGIN {
 			prev = "";
 		}
