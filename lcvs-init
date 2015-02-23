@@ -54,26 +54,6 @@ create_checkout() {
 	try cvs up -dl metadata $(cat "${PORTDIR}"/profiles/categories)
 }
 
-update_layout_conf() {
-	local location=${1}
-	local reponame=${2}
-
-	echo >&2
-	echo " * Updating layout.conf ..." >&2
-
-	cat >> metadata/layout.conf <<_EOF_
-
-# override repository name without modifying profiles/ dir
-repo-name = ${reponame}
-# fill out the blanks with a regular rsync/git checkout
-masters = gentoo
-_EOF_
-	if [ "${?}" -ne 0 ]; then
-		echo "Write failed (!?)" >&2
-		exit 1
-	fi
-}
-
 create_git() {
 	local location=${1}
 
@@ -116,7 +96,10 @@ update_repos_conf() {
 	cat >> "${append_to}" <<_EOF_
 
 [${reponame}]
+repo-name = ${reponame}
 location = ${location}
+masters = gentoo
+force = masters
 # keep it high so stuff aimed for commit overrides other stuff
 priority = 1000
 _EOF_
@@ -233,7 +216,6 @@ main() {
 	fi
 
 	create_checkout "${location}" "${username}"
-	update_layout_conf "${location}" "${reponame}"
 	create_git "${location}"
 	update_repos_conf "${location}" "${reponame}"
 
